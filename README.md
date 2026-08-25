@@ -45,3 +45,18 @@ Reopen Thunar after quitting it. A reboot or desktop logout is not required.
 
 Normal Ubuntu packages with a newer version supersede this local build. Rebase
 and rebuild the patch when Noble publishes a newer Thunar package.
+
+To restore Noble's unmodified package explicitly:
+
+```bash
+sudo apt install --allow-downgrades \
+  thunar=4.18.8-1build3 \
+  thunar-data=4.18.8-1build3
+```
+
+The saved custom order can be removed independently:
+
+```bash
+xfconf-query -c thunar -p /shortcuts-places-order -r
+xfconf-query -c thunar -p /shortcuts-devices-order -r
+```

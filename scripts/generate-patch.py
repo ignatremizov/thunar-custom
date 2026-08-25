@@ -695,7 +695,21 @@ static void               thunar_shortcuts_model_shortcut_devices   (ThunarShort
  *
  * Determines whether an internal move can remain inside its Places or Devices
  * section, or whether an external URI can be inserted into Places.
+ *
+ * Return value: %TRUE if data can be dropped before @dst_path, else %FALSE.
 """,
+    )
+
+    replace_once(
+        path,
+        """ *
+ * Return value: %TRUE if it's possible to drop data before @path, else %FALSE.
+ **/
+gboolean
+thunar_shortcuts_model_drop_possible""",
+        """ **/
+gboolean
+thunar_shortcuts_model_drop_possible""",
     )
 
     replace_once(
