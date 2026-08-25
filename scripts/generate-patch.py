@@ -557,9 +557,14 @@ static void               thunar_shortcuts_model_shortcut_devices   (ThunarShort
   if ((shortcut->group & THUNAR_SHORTCUT_GROUP_DEVICES) != 0)
     {
       device_id = thunar_device_get_identifier (device);
-      order_id = g_strconcat ("device:", device_id, NULL);
-      thunar_shortcuts_model_set_order_id (model, shortcut, order_id);
-      g_free (order_id);
+      if (device_id == NULL)
+        device_id = thunar_device_get_name (device);
+      if (device_id != NULL)
+        {
+          order_id = g_strconcat ("device:", device_id, NULL);
+          thunar_shortcuts_model_set_order_id (model, shortcut, order_id);
+          g_free (order_id);
+        }
       g_free (device_id);
     }
 
@@ -676,6 +681,25 @@ static void               thunar_shortcuts_model_shortcut_devices   (ThunarShort
 
     replace_once(
         path,
+        """ * @model : a #ThunarShortcutstModel.
+ * @path  : a #GtkTreePath.
+ *
+ * Determines whether a drop is possible before the given @path, at the same depth
+ * as @path. I.e., can we drop data at that location. @path does not have to exist;
+ * the return value will almost certainly be FALSE if the parent of @path doesn't
+ * exist, though.
+""",
+        """ * @model    : a #ThunarShortcutsModel.
+ * @src_path : the source path for an internal move, or %NULL for a URI drop.
+ * @dst_path : the proposed insertion path.
+ *
+ * Determines whether an internal move can remain inside its Places or Devices
+ * section, or whether an external URI can be inserted into Places.
+""",
+    )
+
+    replace_once(
+        path,
         """  /* the shortcuts list was changed, so write the gtk bookmarks file */
   thunar_shortcuts_model_save (model);
 }
@@ -734,7 +758,8 @@ static void               thunar_shortcuts_model_shortcut_devices   (ThunarShort
 /**
  * thunar_shortcuts_model_remove:""",
         """  /* Keep GTK bookmarks and the relevant section order synchronized. */
-  thunar_shortcuts_model_save (model);
+  if (section == THUNAR_SHORTCUT_SECTION_PLACES)
+    thunar_shortcuts_model_save (model);
   thunar_shortcuts_model_save_order (model, section);
 }
 
@@ -773,7 +798,10 @@ def patch_view(source: pathlib.Path) -> None:
         """static GtkTreePath   *thunar_shortcuts_view_compute_drop_position        (ThunarShortcutsView      *view,
                                                                           gint                      x,
                                                                           gint                      y,
-                                                                          GtkTreePath              *src_path);""",
+                                                                          GtkTreePath              *src_path);
+static GtkTreePath   *thunar_shortcuts_view_convert_drop_path_to_child     (GtkTreeModel             *model,
+                                                                          GtkTreePath              *child_src_path,
+                                                                          GtkTreePath              *dst_path);""",
     )
 
     replace_function(
@@ -819,17 +847,19 @@ def patch_view(source: pathlib.Path) -> None:
 
                       if (dst_path != NULL)
                         {
-                          if (gtk_tree_path_compare (src_path, dst_path) < 0)
-                            gtk_tree_path_prev (dst_path);
-
                           child_src_path = gtk_tree_model_filter_convert_path_to_child_path (
                               GTK_TREE_MODEL_FILTER (model), src_path);
-                          child_dst_path = gtk_tree_model_filter_convert_path_to_child_path (
-                              GTK_TREE_MODEL_FILTER (model), dst_path);
+                          child_dst_path = thunar_shortcuts_view_convert_drop_path_to_child (
+                              model, child_src_path, dst_path);
                           child_model = gtk_tree_model_filter_get_model (GTK_TREE_MODEL_FILTER (model));
 
                           if (child_src_path != NULL && child_dst_path != NULL)
                             {
+                              if (gtk_tree_path_compare (child_src_path, child_dst_path) < 0)
+                                gtk_tree_path_prev (child_dst_path);
+                              if (gtk_tree_path_compare (src_path, dst_path) < 0)
+                                gtk_tree_path_prev (dst_path);
+
                               thunar_shortcuts_model_move (THUNAR_SHORTCUTS_MODEL (child_model),
                                                            child_src_path, child_dst_path);
                               gtk_tree_selection_select_path (selection, dst_path);
@@ -958,6 +988,64 @@ def patch_view(source: pathlib.Path) -> None:
         "static void\nthunar_shortcuts_view_drop_uri_list",
         textwrap.dedent(
             """\
+            static gboolean
+            thunar_shortcuts_view_groups_share_section (guint group_a,
+                                                        guint group_b)
+            {
+              return (((group_a & THUNAR_SHORTCUT_GROUP_PLACES) != 0
+                       && (group_b & THUNAR_SHORTCUT_GROUP_PLACES) != 0)
+                      || ((group_a & THUNAR_SHORTCUT_GROUP_DEVICES) != 0
+                          && (group_b & THUNAR_SHORTCUT_GROUP_DEVICES) != 0)
+                      || ((group_a & THUNAR_SHORTCUT_GROUP_NETWORK) != 0
+                          && (group_b & THUNAR_SHORTCUT_GROUP_NETWORK) != 0));
+            }
+
+
+
+            static GtkTreePath*
+            thunar_shortcuts_view_convert_drop_path_to_child (GtkTreeModel *model,
+                                                              GtkTreePath  *child_src_path,
+                                                              GtkTreePath  *dst_path)
+            {
+              GtkTreeModel *child_model;
+              GtkTreePath  *child_dst_path;
+              GtkTreeIter   iter;
+              guint         source_group;
+              guint         destination_group;
+
+              if (gtk_tree_path_get_indices (dst_path)[0]
+                  < gtk_tree_model_iter_n_children (model, NULL))
+                return gtk_tree_model_filter_convert_path_to_child_path (
+                    GTK_TREE_MODEL_FILTER (model), dst_path);
+
+              if (child_src_path == NULL)
+                return NULL;
+
+              child_model = gtk_tree_model_filter_get_model (GTK_TREE_MODEL_FILTER (model));
+              if (!gtk_tree_model_get_iter (child_model, &iter, child_src_path))
+                return NULL;
+              gtk_tree_model_get (child_model, &iter,
+                                  THUNAR_SHORTCUTS_MODEL_COLUMN_GROUP, &source_group,
+                                  -1);
+
+              child_dst_path = gtk_tree_path_copy (child_src_path);
+              gtk_tree_path_next (child_dst_path);
+              while (gtk_tree_model_get_iter (child_model, &iter, child_dst_path))
+                {
+                  gtk_tree_model_get (child_model, &iter,
+                                      THUNAR_SHORTCUTS_MODEL_COLUMN_GROUP, &destination_group,
+                                      -1);
+                  if (!thunar_shortcuts_view_groups_share_section (source_group,
+                                                                  destination_group))
+                    return child_dst_path;
+                  gtk_tree_path_next (child_dst_path);
+                }
+
+              return child_dst_path;
+            }
+
+
+
             static GtkTreePath*
             thunar_shortcuts_view_compute_drop_position (ThunarShortcutsView *view,
                                                          gint                 x,
@@ -972,6 +1060,7 @@ def patch_view(source: pathlib.Path) -> None:
               gboolean           result;
               GtkTreePath       *child_path;
               GtkTreePath       *child_src_path = NULL;
+              GtkTreePath       *last_path;
               GtkTreeModel      *child_model;
 
               _thunar_return_val_if_fail (gtk_tree_view_get_model (GTK_TREE_VIEW (view)) != NULL, NULL);
@@ -1004,6 +1093,31 @@ def patch_view(source: pathlib.Path) -> None:
                         {
                           if (child_src_path != NULL)
                             gtk_tree_path_free (child_src_path);
+                          return path;
+                        }
+                      if (child_src_path != NULL)
+                        break;
+                    }
+
+                  /* A filtered model has no directly convertible path after its
+                   * final visible row. Validate that insertion point against the
+                   * last visible row; the drop handler resolves the full-model
+                   * section boundary, including hidden rows.
+                   */
+                  if (child_src_path != NULL
+                      && gtk_tree_path_get_indices (path)[0] >= n_rows
+                      && n_rows > 0)
+                    {
+                      last_path = gtk_tree_path_new_from_indices (n_rows - 1, -1);
+                      child_path = gtk_tree_model_filter_convert_path_to_child_path (
+                          GTK_TREE_MODEL_FILTER (model), last_path);
+                      gtk_tree_path_free (last_path);
+                      result = thunar_shortcuts_model_drop_possible (
+                          THUNAR_SHORTCUTS_MODEL (child_model), child_src_path, child_path);
+                      gtk_tree_path_free (child_path);
+                      if (result)
+                        {
+                          gtk_tree_path_free (child_src_path);
                           return path;
                         }
                     }

@@ -49,4 +49,7 @@ dpkg-buildpackage --build=binary --no-sign
 
 cp -a ../*.deb ../*.buildinfo ../*.changes "${artifact_dir}/"
 cp -a "${generated_patch}" "${artifact_dir}/"
-sha256sum "${artifact_dir}"/* > "${artifact_dir}/SHA256SUMS"
+(
+  cd -- "${artifact_dir}"
+  sha256sum * > SHA256SUMS
+)
