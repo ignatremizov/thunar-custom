@@ -35,7 +35,7 @@ install -m 0644 \
   "${generated_patch}" \
   "debian/patches/${patch_name}"
 printf '%s\n' "${patch_name}" >> debian/patches/series
-QUILT_PATCHES=debian/patches quilt --quiltrc /dev/null push --all
+QUILT_PATCHES=debian/patches quilt --quiltrc /dev/null push -a
 
 DEBEMAIL="ignatremizov@users.noreply.github.com" \
 DEBFULLNAME="Ignat Remizov" \

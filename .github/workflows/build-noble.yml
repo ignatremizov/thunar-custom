@@ -20,13 +20,13 @@ jobs:
 
     steps:
       - name: Check out patch repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Build Noble packages
         run: ./scripts/build-noble.sh
 
       - name: Upload Debian packages and checksums
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: thunar-4.18.8-1build3-ignat1-amd64
           path: artifacts/
