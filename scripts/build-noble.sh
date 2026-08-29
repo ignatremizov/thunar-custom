@@ -7,18 +7,14 @@ readonly source_dsc="https://archive.ubuntu.com/ubuntu/pool/universe/t/thunar/th
 readonly project_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly build_root="${project_dir}/build"
 readonly artifact_dir="${project_dir}/artifacts"
-readonly patch_name="0002-persist-shortcuts-pane-order.patch"
-readonly generated_patch="${build_root}/${patch_name}"
+readonly patch_name="0002-persist-shortcuts-pane-order-hardened.patch"
+readonly committed_patch="${project_dir}/patches/${patch_name}"
 
 sudo apt-get update
-sudo apt-get install --yes build-essential devscripts equivs quilt
+sudo apt-get install --yes build-essential devscripts equivs quilt xvfb xauth
 
 rm -rf -- "${build_root}" "${artifact_dir}"
 mkdir -p -- "${build_root}" "${artifact_dir}"
-
-python3 "${project_dir}/scripts/generate-patch.py" \
-  --source-dir "${build_root}/upstream-git" \
-  --output "${generated_patch}"
 
 cd -- "${build_root}"
 
@@ -32,7 +28,7 @@ sudo mk-build-deps \
   debian/control
 
 install -m 0644 \
-  "${generated_patch}" \
+  "${committed_patch}" \
   "debian/patches/${patch_name}"
 printf '%s\n' "${patch_name}" >> debian/patches/series
 QUILT_PATCHES=debian/patches quilt --quiltrc /dev/null push -a
@@ -40,15 +36,21 @@ QUILT_PATCHES=debian/patches quilt --quiltrc /dev/null push -a
 DEBEMAIL="ignatremizov@users.noreply.github.com" \
 DEBFULLNAME="Ignat Remizov" \
   dch \
-    --local "+ignat" \
+    --newversion "${source_version}+ignat2" \
     --distribution noble \
     --force-distribution \
-    "Persist drag-and-drop ordering for Places and Devices shortcuts."
+    "Backport hardened persistent ordering for Places and Devices shortcuts."
 
 dpkg-buildpackage --build=binary --no-sign
 
+# Debian's normal build runs the headless suite through dh_auto_test. Repeat
+# it explicitly so the workflow contract remains visible if packaging rules
+# change, then exercise the display-dependent window/monitor cases under Xvfb.
+make -C tests check
+xvfb-run -a ./tests/test-shortcuts-view
+
 cp -a ../*.deb ../*.buildinfo ../*.changes "${artifact_dir}/"
-cp -a "${generated_patch}" "${artifact_dir}/"
+cp -a "${committed_patch}" "${artifact_dir}/"
 (
   cd -- "${artifact_dir}"
   sha256sum * > SHA256SUMS
