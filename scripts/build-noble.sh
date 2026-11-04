@@ -43,7 +43,7 @@ install_build_dependencies() {
 set_package_version() {
   DEBEMAIL="ignatremizov@users.noreply.github.com" \
   DEBFULLNAME="Ignat Remizov" \
-    dch --newversion "$1" --distribution noble --force-distribution "$2"
+    dch -b --newversion "$1" --distribution noble --force-distribution "$2"
 }
 
 # XDT_VERSION_INIT is newer than Noble's build tools. This package is used only
