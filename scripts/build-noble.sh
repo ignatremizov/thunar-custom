@@ -108,6 +108,29 @@ tar -xf thunar_4.20.9-1.debian.tar.xz -C "thunar-${thunar_version}"
   QUILT_PATCHES=debian/patches quilt --quiltrc /dev/null push -a
   set_package_version "${thunar_package_version}" \
     "Port hardened persistent Places and Devices ordering to stable Thunar 4.20.10."
+  # The release tarball bundles bindings generated with a newer GLib. Native
+  # release builds disable maintainer regeneration, so regenerate explicitly
+  # with Noble's generator rather than importing unavailable GLib symbols.
+  (
+    cd thunar
+    # These two canonical XML inputs are omitted from the release tarball.
+    fetch \
+      'https://gitlab.xfce.org/api/v4/projects/8/repository/files/thunar%2Fthunar-thumbnailer-dbus.xml/raw?ref=7760dfaa32db5ab6049606ca048ba2219688f369' \
+      99746448b96a1c730c99324bd4b2412c5709162c3749d4628efb6e160611e563 \
+      thunar-thumbnailer-dbus.xml
+    fetch \
+      'https://gitlab.xfce.org/api/v4/projects/8/repository/files/thunar%2Fthunar-thumbnail-cache-dbus.xml/raw?ref=7760dfaa32db5ab6049606ca048ba2219688f369' \
+      ed7f7b7a6405dcee228b74f889ffd18e82a429444f72199a688715899e85bac6 \
+      thunar-thumbnail-cache-dbus.xml
+    /usr/bin/gdbus-codegen --c-namespace Thunar \
+      --generate-c-code=thunar-dbus-freedesktop-interfaces thunar-dbus-freedesktop-interfaces.xml
+    /usr/bin/gdbus-codegen --c-namespace Thunar \
+      --generate-c-code=thunar-dbus-service-infos thunar-dbus-service-infos.xml
+    /usr/bin/gdbus-codegen --c-namespace Thunar \
+      --generate-c-code=thunar-thumbnailer-proxy thunar-thumbnailer-dbus.xml
+    /usr/bin/gdbus-codegen --c-namespace Thunar \
+      --generate-c-code=thunar-thumbnail-cache-proxy thunar-thumbnail-cache-dbus.xml
+  )
   # dh_auto_test runs the four headless executables. Xvfb adds the full
   # display-dependent view, window, accelerator and monitor coverage.
   dpkg-buildpackage --build=binary --no-sign
