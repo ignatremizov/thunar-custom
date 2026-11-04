@@ -1,12 +1,13 @@
 # Thunar custom builds for Ubuntu 24.04
 
-This branch carries the hardened Thunar shortcuts-ordering backport for Ubuntu
-24.04. GitHub Actions downloads the official Noble source package, applies the
-committed patch through Debian's quilt series, runs the isolated regression
-suite, and publishes installable `.deb` artifacts.
+This branch builds stable **Thunar 4.20.10** with the existing hardened sidebar
+ordering feature for **Ubuntu 24.04**. GitHub Actions downloads checksum-pinned
+upstream sources and Debian packaging, applies the committed quilt patch,
+runs the isolated regression suite, and publishes installable `.deb` artifacts.
 
 No Thunar source tree or build dependencies are required on the target
-workstation.
+workstation. The older 4.18.8 `+ignat2` delivery remains on
+`backport/noble-4.18.8-hardening`.
 
 ## Hardened customization
 
@@ -27,52 +28,90 @@ workstation.
 - Preserve native entry behavior, icons, visibility, context menus, and GTK
   bookmark synchronization.
 
-The patch is generated from the reviewable source branch
-`backport/noble-4.18.8-hardening` in the local upstream checkout. Its three
-commits separate the original drag-order feature, production hardening, and
-the regression suite. The patch is based on the official `thunar-4.18.8` tag
-and currently ends at source commit `235eaee`.
+The new patch is generated from source branch
+`backport/noble-4.20.10-hardening` in the local upstream checkout. It is based
+on the official `thunar-4.20.10` tag, commit
+`7760dfaa32db5ab6049606ca048ba2219688f369`, and ports the six production
+commits from the previously hardened `feature/persistent-shortcut-order`
+branch, plus the same four executable regression suite used on 4.18.8.
+Compatibility changes preserve native 4.20 APIs and behavior around the
+ordering implementation.
+
+The `/shortcuts-places-order`, `/shortcuts-devices-order` and pending-v1
+Xfconf format remain compatible with the installed 4.18.8 `+ignat2` build.
+The existing limitations still apply: uncooperative GTK clients do not share
+Thunar's lock or close-time compare-and-swap; different XDG roots do not
+coordinate locks; the journal does not guarantee durability through power loss.
 
 ## Build
 
-The workflow is pinned to Ubuntu 24.04 and the official
-`thunar_4.18.8-1build3` Noble source package.
+The workflow is pinned to Ubuntu 24.04 and builds:
+
+- Thunar `4.20.10-1~noble1+ignat1`, using the official 4.20.10 release tarball
+  with Debian's 4.20.9 packaging and its normal multiarch module patch.
+- Exo `4.20.0-1~noble1+ignat1`, required by Thunar 4.20, against Noble's
+  existing GTK and Xfce libraries. Its terminal selection still supports
+  `~/.config/xfce4/helpers.rc`.
+- Xfce build tools 4.20.0, used only inside CI and excluded from the runtime
+  artifact.
 
 ```bash
 ./scripts/build-noble.sh
 ```
 
-The script is intended for GitHub's disposable Ubuntu runner. It installs build
-dependencies, builds `4.18.8-1build3+ignat2`, runs all four headless regression
-executables plus the display-dependent shortcuts-view pass under Xvfb, and
-writes packages and checksums to `artifacts/`.
+The script is intended for GitHub's disposable Ubuntu runner. It installs
+build dependencies, runs all four headless regression executables during the
+Debian build, adds the full 18-case shortcuts-view pass under Xvfb, and writes
+packages, test logs, build metadata and checksums to `artifacts/`. It refuses
+to overwrite an existing `build/` or `artifacts/` directory.
+
+A separate workflow step installs only the runtime bundle into a fresh
+Ubuntu 24.04 container and checks the installed binary under Xvfb/private
+D-Bus. No additional package repository or desktop upgrade is needed.
 
 ## Install
 
-Download the successful workflow artifact and install the matching `thunar` and
-`thunar-data` packages together:
+Download the successful workflow artifact, verify `SHA256SUMS`, and install
+the six matching runtime packages together:
 
 ```bash
-sudo apt install ./thunar-data_*+ignat2_all.deb ./thunar_*+ignat2_amd64.deb
+sha256sum --check SHA256SUMS
+pkexec apt-get install --yes \
+  ./libexo-common_4.20.0-1~noble1+ignat1_all.deb \
+  ./libexo-2-0_4.20.0-1~noble1+ignat1_amd64.deb \
+  ./exo-utils_4.20.0-1~noble1+ignat1_amd64.deb \
+  ./thunar-data_4.20.10-1~noble1+ignat1_all.deb \
+  ./libthunarx-3-0_4.20.10-1~noble1+ignat1_amd64.deb \
+  ./thunar_4.20.10-1~noble1+ignat1_amd64.deb
 thunar -q
 ```
 
 Reopen Thunar after quitting it. A reboot or desktop logout is not required.
 
-Normal Ubuntu packages with a newer version supersede this local build. Rebase
-and rebuild the patch when Noble publishes a newer Thunar package.
+First finish any active file operations before quitting Thunar. Existing
+settings, bookmarks, MIME associations and user GTK CSS are retained. If
+additional Thunar/Exo development or introspection packages are installed,
+upgrade those matching packages from the artifact in the same transaction.
 
-The currently installed `+ignat1` package can remain in place while this branch
-builds and is reviewed. Installing `+ignat2` upgrades it in place and preserves
-the existing `/shortcuts-places-order` and `/shortcuts-devices-order` values.
+Only packages with a higher Debian version supersede this build. Noble's
+4.18 updates do not supersede 4.20, so track upstream stable fixes and rebuild
+this branch as needed. No APT hold is installed.
 
-To restore Noble's unmodified package explicitly:
+To restore the prior hardened 4.18.8 build, use the retained `+ignat2` Thunar
+packages and downgrade its library and the three Exo packages to Noble:
 
 ```bash
-sudo apt install --allow-downgrades \
-  thunar=4.18.8-1build3 \
-  thunar-data=4.18.8-1build3
+pkexec apt-get install --yes --allow-downgrades \
+  /absolute/path/to/thunar_4.18.8-1build3+ignat2_amd64.deb \
+  /absolute/path/to/thunar-data_4.18.8-1build3+ignat2_all.deb \
+  libthunarx-3-0=4.18.8-1build3 \
+  libexo-2-0=4.18.0-1build4 \
+  libexo-common=4.18.0-1build4 \
+  exo-utils=4.18.0-1build4
 ```
+
+To return fully to Noble's unmodified Thunar instead, replace the two file
+arguments with `thunar=4.18.8-1build3` and `thunar-data=4.18.8-1build3`.
 
 The saved custom order can be removed independently:
 

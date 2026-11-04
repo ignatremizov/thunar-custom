@@ -5,7 +5,7 @@ on:
   push:
     branches:
       - main
-      - backport/noble-4.18.8-hardening
+      - stable/noble-4.20.10-hardening
     paths:
       - ".github/workflows/build-noble.yml"
       - "patches/**"
@@ -26,10 +26,28 @@ jobs:
       - name: Build Noble packages
         run: ./scripts/build-noble.sh
 
+      - name: Verify runtime installation on clean Ubuntu 24.04
+        run: |
+          docker run --rm \
+            --volume "$GITHUB_WORKSPACE/artifacts:/packages:ro" \
+            ubuntu:24.04 bash -euc '
+              apt-get update
+              apt-get install --yes --no-install-recommends \
+                /packages/thunar_*.deb \
+                /packages/thunar-data_*.deb \
+                /packages/libthunarx-3-0_*.deb \
+                /packages/libexo-2-0_*.deb \
+                /packages/libexo-common_*.deb \
+                /packages/exo-utils_*.deb \
+                dbus-x11 xvfb xauth xfconf
+              xvfb-run -a dbus-run-session -- thunar --version
+              dpkg-query -W thunar thunar-data libthunarx-3-0 libexo-2-0 libexo-common exo-utils
+            '
+
       - name: Upload Debian packages and checksums
         uses: actions/upload-artifact@v7
         with:
-          name: thunar-4.18.8-1build3-ignat2-hardened-amd64
+          name: thunar-4.20.10-noble-ignat1-hardened-amd64
           path: artifacts/
           if-no-files-found: error
           retention-days: 30
