@@ -82,7 +82,7 @@ the six matching runtime packages together:
 
 ```bash
 sha256sum --check SHA256SUMS
-pkexec apt-get install --yes \
+pkexec --keep-cwd apt-get install --yes --no-remove --no-install-recommends \
   ./libexo-common_4.20.0-1~noble1+ignat1_all.deb \
   ./libexo-2-0_4.20.0-1~noble1+ignat1_amd64.deb \
   ./exo-utils_4.20.0-1~noble1+ignat1_amd64.deb \
