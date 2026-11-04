@@ -67,9 +67,11 @@ to overwrite an existing `build/` or `artifacts/` directory.
 
 A separate workflow step installs only the runtime bundle into a fresh
 Ubuntu 24.04 container and checks the installed binary under Xvfb/private
-D-Bus. No additional package repository or desktop upgrade is needed.
+D-Bus and dynamically loads the optional trash-panel plugin. No additional
+package repository or desktop upgrade is needed.
 The tarball's bundled D-Bus bindings are regenerated with Noble's
-`gdbus-codegen` so the result uses the target release's GLib APIs. Two XML
+`gdbus-codegen`, including the optional trash-panel plugin, so the result
+uses the target release's GLib APIs. Two XML
 inputs omitted from the tarball are fetched from the exact upstream release
 commit and checksum-verified before generation.
 

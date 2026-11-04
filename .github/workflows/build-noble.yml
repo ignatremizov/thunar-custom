@@ -39,8 +39,9 @@ jobs:
                 /packages/libexo-2-0_*.deb \
                 /packages/libexo-common_*.deb \
                 /packages/exo-utils_*.deb \
-                dbus-x11 xvfb xauth xfconf
+                dbus-x11 xvfb xauth xfconf python3 libxfce4panel-2.0-4
               xvfb-run -a dbus-run-session -- thunar --version
+              python3 -c "import ctypes, os; ctypes.CDLL(\"/usr/lib/x86_64-linux-gnu/xfce4/panel/plugins/libthunar-tpa.so\", mode=os.RTLD_NOW)"
               dpkg-query -W thunar thunar-data libthunarx-3-0 libexo-2-0 libexo-common exo-utils
             '
 

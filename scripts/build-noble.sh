@@ -131,6 +131,11 @@ tar -xf thunar_4.20.9-1.debian.tar.xz -C "thunar-${thunar_version}"
     /usr/bin/gdbus-codegen --c-namespace Thunar \
       --generate-c-code=thunar-thumbnail-cache-proxy thunar-thumbnail-cache-dbus.xml
   )
+  (
+    cd plugins/thunar-tpa
+    /usr/bin/gdbus-codegen --generate-c-code thunar-tpa-bindings \
+      --c-namespace thunarTPA --interface-prefix org.xfce. thunar-tpa-bindings.xml
+  )
   # dh_auto_test runs the four headless executables. Xvfb adds the full
   # display-dependent view, window, accelerator and monitor coverage.
   dpkg-buildpackage --build=binary --no-sign
